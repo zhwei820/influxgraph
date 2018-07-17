@@ -9,7 +9,7 @@ services:
     volumes:
       - ./grafana:/var/lib/grafana
   influxgraph2:
-    build: .
+    image: influxgraph2
     links:
       - influxdb:influxdb
     ports:

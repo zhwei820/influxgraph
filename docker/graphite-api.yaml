@@ -1,7 +1,0 @@
-finders:
-  - influxgraph.InfluxDBFinder
-influxdb:
-  host: dockerhost
-  memcache:
-    host: localhost
-  log_level: info
