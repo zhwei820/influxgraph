@@ -363,6 +363,7 @@ class InfluxDBFinder(object):
             if _filter and not _filter.match(path):
                 continue
             try:
+                logger.info('template: %s' , template)
                 measurement, tags, field = apply_template(
                     path.split('.'), template, default_tags, separator)
             except TemplateMatchError:
@@ -374,6 +375,7 @@ class InfluxDBFinder(object):
                     _tags.setdefault(tag, []).append(tags[tag])
             if not field:
                 field = 'value'
+
             if field not in _fields:
                 _fields.append(field)
             matched_paths.append(path)
@@ -433,20 +435,31 @@ class InfluxDBFinder(object):
             measurements, tags, fields, retention)
         return measurements, tags, fields, groupings, measurement_data
 
-    def _gen_query_values(self, paths, retention):
+    def _gen_query_values(self, paths, retention, ii):
         if self.graphite_templates:
             return self._gen_query_values_from_templates(paths, retention)
+        if ii:
+            paths = [path for path in paths if (any([item in path for item in ['response', 'counter']]))]
+        else:
+            paths = [path for path in paths if (all([item not in path for item in ['response', 'counter']]))]
+
         measurement = ', '.join(('"%s"."%s"' % (retention, path,)
                                  for path in paths)) if retention \
                       else ', '.join(('"%s"' % (path,)
                                       for path in paths))
-        return measurement, None, ['value'], None, None
+        return measurement, None, ['value',] if ii else ['upper'], None, None
 
     def _gen_infl_stmt(self, measurements, tags, fields, groupings, start_time,
                        end_time, aggregation_func, interval):
+
+        logger.info('%s', measurements)
+        logger.info('%s', fields)
+
         time_clause = "(time > %ds and time <= %ds)" % (start_time, end_time,)
+        
         query_fields = ', '.join(['%s("%s") as "%s"' % (
-            aggregation_func, field, field) for field in fields])
+            aggregation_func, field, 'value') for field in fields])
+
         groupings = ['"%s"' % (grouping,) for grouping in groupings] \
             if groupings else []
         groupings.insert(0, 'time(%ss)' % (interval,))
@@ -454,20 +467,26 @@ class InfluxDBFinder(object):
         where_clause = "%s AND %s" % (time_clause, tags,) if tags else \
                        time_clause
         group_by = '%s fill(%s)' % (groupings, self.fill_param,)
+
         query = 'select %s from %s where %s GROUP BY %s' % (
             query_fields, measurements, where_clause, group_by,)
         return query
 
     def _gen_influxdb_stmt(self, start_time, end_time, paths, interval,
-                           aggregation_func):
+                           aggregation_func, ii):
         retention = get_retention_policy(interval, self.retention_policies) \
                     if self.retention_policies else None
         measurements, tags, fields, \
             groupings, measurement_data = self._gen_query_values(
-                paths, retention)
+                paths, retention, ii)
+        if not measurements:  # 异常处理
+            return None, None
+
         query = self._gen_infl_stmt(measurements, tags, fields, groupings,
                                     start_time, end_time, aggregation_func,
                                     interval)
+        logger.debug("query - %s", query)
+
         return query, measurement_data
 
     def _make_empty_multi_fetch_result(self, time_info, paths):
@@ -503,13 +522,18 @@ class InfluxDBFinder(object):
                      'end_time: %s, interval %s',
                      datetime.datetime.fromtimestamp(float(start_time)),
                      datetime.datetime.fromtimestamp(float(end_time)), interval)
-        try:
-            query, measurement_data = self._gen_influxdb_stmt(
-                start_time, end_time, paths, interval, aggregation_func)
-        except TypeError as ex:
-            logger.error("Type error generating query statement - %s", ex)
-            return self._make_empty_multi_fetch_result(time_info, paths)
-        data = self._run_infl_query(query, paths, measurement_data)
+        data = {}
+        for ii in range(2):
+            try:
+                query, measurement_data = self._gen_influxdb_stmt(
+                    start_time, end_time, paths, interval, aggregation_func, ii)
+            except TypeError as ex:
+                logger.error("Type error generating query statement - %s", ex)
+                return self._make_empty_multi_fetch_result(time_info, paths)
+            if query:
+                data2 = self._run_infl_query(query, paths, measurement_data)
+                data2 = {k:v for k,v in data2.items() if v}
+                data.update(data2)
         # Do not cache empty responses
         if self.memcache and sum([len(vals) for vals in data.values()]) > 0:
             self.memcache.set(memcache_key, data,
