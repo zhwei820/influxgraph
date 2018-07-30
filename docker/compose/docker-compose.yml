@@ -9,7 +9,7 @@ services:
   #   volumes:
   #     - ./grafana:/var/lib/grafana
   influxgraph:
-    image: hub.qixincha.com/influxgraph
+    build: ../
     links:
       - influxdb:influxdb
     ports:

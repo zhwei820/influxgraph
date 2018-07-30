@@ -3,3 +3,6 @@
 dist
 build
 *~
+.idea
+docker/compose/influxdb
+docker/compose/grafana

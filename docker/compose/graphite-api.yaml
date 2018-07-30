@@ -2,8 +2,8 @@ finders:
   - influxgraph.InfluxDBFinder
 influxdb:
   host: influxdb
-  memcache: {}
-  #   host: localhost
+  memcache: 
+    host: localhost
   log_level: debug
   log_file: /var/log/log_file.log
   reindex_interval: 60
