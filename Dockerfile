@@ -6,6 +6,8 @@ ENV HOME /root
 ONBUILD RUN /etc/my_init.d/00_regen_ssh_host_keys.sh
 CMD ["/sbin/my_init"]
 
+
+
 ### see also brutasse/graphite-api
 
 VOLUME /srv/graphite
@@ -13,34 +15,29 @@ VOLUME /srv/graphite
 RUN apt-get update && apt-get upgrade -y
 
 # Dependencies
-RUN apt-get install -y language-pack-en python-virtualenv libcairo2-dev nginx memcached python-dev libffi-dev
+RUN apt-get install -y python-virtualenv libcairo2-dev nginx memcached python-dev libffi-dev
 RUN rm -f /etc/nginx/sites-enabled/default
 
-ENV LANGUAGE en_US.UTF-8
-ENV LANG en_US.UTF-8
-ENV LC_ALL en_US.UTF-8
-RUN locale-gen en_US.UTF-8 && dpkg-reconfigure locales
-
 # add our default config and allow subsequent builds to add a different one
-ADD graphite-api.yaml /etc/graphite-api.yaml
+ADD docker/graphite-api.yaml /etc/graphite-api.yaml
 RUN chmod 0644 /etc/graphite-api.yaml
-ONBUILD ADD graphite-api.yaml /etc/graphite-api.yaml
+ONBUILD ADD docker/graphite-api.yaml /etc/graphite-api.yaml
 ONBUILD RUN chmod 0644 /etc/graphite-api.yaml
 
 # Nginx service
-ADD nginx.conf /etc/nginx/nginx.conf
-ADD graphite_nginx.conf /etc/nginx/sites-available/graphite.conf
+ADD docker/nginx.conf /etc/nginx/nginx.conf
+ADD docker/graphite_nginx.conf /etc/nginx/sites-available/graphite.conf
 RUN ln -s /etc/nginx/sites-available/graphite.conf /etc/nginx/sites-enabled/
 RUN mkdir /etc/service/nginx
-ADD nginx.sh /etc/service/nginx/run
+ADD docker/nginx.sh /etc/service/nginx/run
 
 # Add docker host IP in hosts file on startup
-ADD dockerhost.sh /etc/my_init.d/dockerhost.sh
+ADD docker/dockerhost.sh /etc/my_init.d/dockerhost.sh
 RUN chmod +x /etc/my_init.d/dockerhost.sh
 
 # Memcached service
 RUN mkdir /etc/service/memcached
-ADD memcached.sh /etc/service/memcached/run
+ADD docker/memcached.sh /etc/service/memcached/run
 
 # Install in virtualenv
 RUN virtualenv /srv/graphite-env
@@ -55,12 +52,16 @@ ONBUILD ENV PATH=/srv/graphite-env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:
 RUN pip install -U pip
 RUN pip install -U setuptools wheel
 
+
 # Install InfluxGraph, dependencies and tools for running webapp
-RUN pip install -U gunicorn graphite-api influxgraph
+RUN pip install -U gunicorn graphite-api 
+
+ADD ./ /root/influxgraph
+RUN pip install -e /root/influxgraph
 
 # init scripts
 RUN mkdir /etc/service/graphite-api
-ADD graphite-api.sh /etc/service/graphite-api/run
+ADD docker/graphite-api.sh /etc/service/graphite-api/run
 RUN chmod +x /etc/service/graphite-api/run
 
 # Clean up APT when done.

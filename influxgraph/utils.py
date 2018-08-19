@@ -191,7 +191,7 @@ def _retrieve_field_data(infl_data, measurement_data, measurement,
 def _read_measurement_metric_values(infl_data, measurement, paths, _data):
     if measurement not in paths:
         return
-    _data[measurement] = [d['value']
+    _data[measurement] = [d[('value'  if ('count' in measurement ) else 'upper')]
                           for d in infl_data.get_points(
                                   measurement=measurement)]
 

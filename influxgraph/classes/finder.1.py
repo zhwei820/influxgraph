@@ -87,8 +87,6 @@ class InfluxDBFinder(object):
             'fields_key', _MEMCACHE_FIELDS_KEY)
         self.memcache = make_memcache_client(
             memcache_host, memcache_max_value=memcache_conf.get('max_value', 1))
-        logger.info(self.memcache)
-
         self.aggregation_functions = _compile_aggregation_patterns(
             influxdb_config.get('aggregation_functions', DEFAULT_AGGREGATIONS))
         self.fill_param = influxdb_config.get('fill', 'null')
@@ -415,7 +413,7 @@ class InfluxDBFinder(object):
 
     def _gen_query(self, measurements, tags, fields, retention):
         groupings = set([k for t in tags for k in t.keys()])
-        _measurements = ', '.join(
+        measurements = ', '.join(
             ('"%s"."%s"' % (retention, measure,) for measure in measurements)) \
             if retention \
             else ', '.join(('"%s"' % (measure,) for measure in measurements))
@@ -425,13 +423,8 @@ class InfluxDBFinder(object):
                 for tag_val in __tags[tag]])
                           for tag in __tags])
             for __tags in tags]]) if tags else None
-        fields = fields if fields else (['value']  if ('count' in _measurements ) else ['upper'])
-        logger.info()
-        logger.info(fields)
-        logger.info(_measurements)
-        logger.info()
-
-        return _measurements, _tags, fields, groupings
+        fields = fields if fields else ['value']
+        return measurements, _tags, fields, groupings
 
     def _gen_query_values_from_templates(self, paths, retention):
         measurements, tags, fields, measurement_data = \
@@ -443,11 +436,11 @@ class InfluxDBFinder(object):
     def _gen_query_values(self, paths, retention):
         if self.graphite_templates:
             return self._gen_query_values_from_templates(paths, retention)
-        _measurements = ', '.join(('"%s"."%s"' % (retention, path,)
+        measurement = ', '.join(('"%s"."%s"' % (retention, path,)
                                  for path in paths)) if retention \
                       else ', '.join(('"%s"' % (path,)
                                       for path in paths))
-        return _measurements, None, (['value']  if ('count' in _measurements ) else ['upper']), None, None
+        return measurement, None, ['value'], None, None
 
     def _gen_infl_stmt(self, measurements, tags, fields, groupings, start_time,
                        end_time, aggregation_func, interval):
@@ -463,9 +456,6 @@ class InfluxDBFinder(object):
         group_by = '%s fill(%s)' % (groupings, self.fill_param,)
         query = 'select %s from %s where %s GROUP BY %s' % (
             query_fields, measurements, where_clause, group_by,)
-
-        logger.info(query)
-
         return query
 
     def _gen_influxdb_stmt(self, start_time, end_time, paths, interval,
@@ -506,8 +496,6 @@ class InfluxDBFinder(object):
         memcache_key = gen_memcache_key(start_time, end_time, aggregation_func,
                                         paths)
         data = self.memcache.get(memcache_key) if self.memcache else None
-        logger.info(self.memcache)
-
         if data:
             logger.debug("Found cached data for key %s", memcache_key)
             return time_info, data
@@ -518,8 +506,6 @@ class InfluxDBFinder(object):
         try:
             query, measurement_data = self._gen_influxdb_stmt(
                 start_time, end_time, paths, interval, aggregation_func)
-            logger.info(query)
-
         except TypeError as ex:
             logger.error("Type error generating query statement - %s", ex)
             return self._make_empty_multi_fetch_result(time_info, paths)

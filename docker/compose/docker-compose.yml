@@ -1,22 +1,22 @@
 version: '3'
 services:
-  # grafana:
-  #   image: "grafana/grafana"
-  #   ports:
-  #     - "3001:3000"
-  #   links:
-  #     - influxdb:influxdb
-  #   volumes:
-  #     - ./grafana:/var/lib/grafana
+  grafana:
+    image: "grafana/grafana"
+    ports:
+      - "3001:3000"
+    links:
+      - influxdb:influxdb
+    volumes:
+      - ./grafana:/var/lib/grafana
   influxgraph:
-    build: ../
+    build: ../../
     links:
       - influxdb:influxdb
     ports:
       - "8300:80"
     volumes:
       - ./graphite-api.yaml:/etc/graphite-api.yaml:ro
-      - ../../:/srv/influxgraph
+      - ../../:/root/influxgraph
 
   influxdb:
     environment:
